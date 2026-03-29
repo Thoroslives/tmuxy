@@ -852,10 +852,10 @@ async fn set_client_size(state: &Arc<AppState>, session: &str, conn_id: u64, col
             session_conns.client_sizes.insert(conn_id, (cols, rows));
             let sizes = &session_conns.client_sizes;
             let min = compute_min_client_size(sizes);
-            // Skip if the minimum size hasn't changed since the last resize
-            if session_conns.last_resize == Some(min) {
-                return;
-            }
+            // Always send the resize command. With refresh-client -C (not
+            // resizew), the command is cheap and doesn't trigger feedback
+            // loops. We must re-send even if min hasn't changed because an
+            // SSH client may have resized the window externally.
             session_conns.last_resize = Some(min);
             eprintln!("[size] All clients: {:?}", sizes);
             (Some(min), session_conns.monitor_command_tx.clone())

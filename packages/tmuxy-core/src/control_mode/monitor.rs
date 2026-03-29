@@ -159,7 +159,7 @@ impl TmuxMonitor {
         // trigger SIGWINCH to the shell (which causes prompt redraw %output
         // that races with our capture-pane responses).
         self.connection
-            .send_command("set window-size manual")
+            .send_command("set window-size latest")
             .await?;
 
         // Resize the window to the initial size to ensure panes aren't tiny.
@@ -167,8 +167,8 @@ impl TmuxMonitor {
         // The browser will send a proper resize once it connects.
         self.connection
             .send_command(&format!(
-                "resizew -t {} -x {} -y {}",
-                self.config.session, INITIAL_PTY_COLS, INITIAL_PTY_ROWS
+                "refresh-client -C {}x{}",
+                INITIAL_PTY_COLS, INITIAL_PTY_ROWS
             ))
             .await?;
 
@@ -749,30 +749,17 @@ impl TmuxMonitor {
                     match cmd {
                         Some(MonitorCommand::ResizeWindow { cols, rows }) => {
                             eprintln!("[monitor] Processing ResizeWindow: {}x{}", cols, rows);
-                            // Resize ALL windows in the session. With window-size manual,
-                            // each window tracks its own size independently. Without
-                            // resizing all windows, pre-existing or background windows
-                            // retain their old dimensions and don't fill the viewport.
-                            let window_ids = self.aggregator.window_ids();
-                            if window_ids.is_empty() {
-                                // No windows known yet (initial sync), resize current window
-                                let resize_cmd = format!("resizew -x {} -y {}", cols, rows);
-                                if let Err(e) = self.connection.send_command(&resize_cmd).await {
-                                    emitter.emit_error(format!("Failed to resize window: {}", e));
-                                } else {
-                                    self.pending_resize_count += 1;
-                                    eprintln!("[monitor] Sent resize command: {}", resize_cmd);
-                                }
+                            // Declare our control mode client's viewport size via
+                            // refresh-client -C. With window-size latest, tmux will
+                            // auto-size windows to the most recently active client.
+                            // This allows SSH clients to drive the size when they
+                            // interact, while the browser reclaims it on activity.
+                            let resize_cmd = format!("refresh-client -C {}x{}", cols, rows);
+                            if let Err(e) = self.connection.send_command(&resize_cmd).await {
+                                emitter.emit_error(format!("Failed to set client size: {}", e));
                             } else {
-                                let cmds: Vec<String> = window_ids.iter()
-                                    .map(|wid| format!("resizew -t {} -x {} -y {}", wid, cols, rows))
-                                    .collect();
-                                eprintln!("[monitor] Resizing {} windows", cmds.len());
-                                if let Err(e) = self.connection.send_commands_batch(&cmds).await {
-                                    emitter.emit_error(format!("Failed to resize windows: {}", e));
-                                } else {
-                                    self.pending_resize_count += 1;
-                                }
+                                self.pending_resize_count += 1;
+                                eprintln!("[monitor] Set client size: {}", resize_cmd);
                             }
                         }
                         Some(MonitorCommand::RunCommand { command }) => {

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#1d2021"/>
+  <!-- Tmux pane dividers in Claude orange -->
+  <rect x="15" y="4" width="2" height="24" rx="1" fill="#E07A5F"/>
+  <rect x="4" y="15" width="24" height="2" rx="1" fill="#E07A5F"/>
+  <!-- Diagonal accents suggesting Claude's sparkle -->
+  <rect x="9.5" y="6.8" width="1.5" height="7" rx="0.75" fill="#E07A5F" opacity="0.6" transform="rotate(-45 10.25 10.3)"/>
+  <rect x="21" y="18.2" width="1.5" height="7" rx="0.75" fill="#E07A5F" opacity="0.6" transform="rotate(-45 21.75 21.7)"/>
+  <rect x="18.2" y="6.8" width="1.5" height="7" rx="0.75" fill="#E07A5F" opacity="0.6" transform="rotate(45 18.95 10.3)"/>
+  <rect x="6.8" y="18.2" width="1.5" height="7" rx="0.75" fill="#E07A5F" opacity="0.6" transform="rotate(45 7.55 21.7)"/>
+</svg>
