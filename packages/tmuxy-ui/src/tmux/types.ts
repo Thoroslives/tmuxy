@@ -143,6 +143,8 @@ export interface CopyModeState {
   scrollTop: number;
   /** Pending selection to apply on first chunk load (visible-relative row) */
   pendingSelection?: { mode: 'char' | 'line'; row: number; col: number };
+  /** Queued fetch request when a fetch was needed but loading was in progress */
+  pendingFetch?: { start: number; end: number };
 }
 
 // ============================================

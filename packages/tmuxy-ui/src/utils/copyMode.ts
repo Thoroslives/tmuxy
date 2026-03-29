@@ -126,7 +126,7 @@ export function getNeededChunk(
   loadedRanges: Array<[number, number]>,
   historySize: number,
   totalLines: number,
-  chunkSize: number = 200,
+  chunkSize: number = 500,
 ): { start: number; end: number } | null {
   const THRESHOLD = 50;
   const viewStart = scrollTop;

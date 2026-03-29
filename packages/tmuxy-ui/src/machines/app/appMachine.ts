@@ -1872,7 +1872,7 @@ export const appMachine = setup({
               sendTo('tmux', {
                 type: 'FETCH_SCROLLBACK_CELLS' as const,
                 paneId: event.paneId,
-                start: -(pane.height + 200),
+                start: -(pane.height + 500),
                 end: pane.height - 1,
               }),
             );
@@ -1913,9 +1913,9 @@ export const appMachine = setup({
           }),
         },
         COPY_MODE_CHUNK_LOADED: {
-          actions: assign(({ event, context }) => {
+          actions: enqueueActions(({ event, context, enqueue }) => {
             const existing = context.copyModeStates[event.paneId];
-            if (!existing) return {};
+            if (!existing) return;
 
             const { lines, loadedRanges } = mergeScrollbackChunk(
               existing.lines,
@@ -1938,6 +1938,7 @@ export const appMachine = setup({
               historySize: event.historySize,
               width: event.width,
               loading: false,
+              pendingFetch: undefined,
               // Shift scrollTop and cursorRow when historySize changed (stale pre-populated value)
               scrollTop:
                 histDiff !== 0
@@ -1963,7 +1964,40 @@ export const appMachine = setup({
               updated.pendingSelection = undefined;
             }
 
-            return { copyModeStates: { ...context.copyModeStates, [event.paneId]: updated } };
+            // Process queued fetch if one was pending during the previous load
+            if (existing.pendingFetch) {
+              // Recalculate what's needed based on current scroll position
+              const needed = getNeededChunk(
+                updated.scrollTop,
+                updated.height,
+                loadedRanges,
+                updated.historySize,
+                updated.totalLines,
+              );
+              if (needed) {
+                updated.loading = true;
+                enqueue(
+                  assign({
+                    copyModeStates: { ...context.copyModeStates, [event.paneId]: updated },
+                  }),
+                );
+                enqueue(
+                  sendTo('tmux', {
+                    type: 'FETCH_SCROLLBACK_CELLS' as const,
+                    paneId: event.paneId,
+                    start: needed.start,
+                    end: needed.end,
+                  }),
+                );
+                return;
+              }
+            }
+
+            enqueue(
+              assign({
+                copyModeStates: { ...context.copyModeStates, [event.paneId]: updated },
+              }),
+            );
           }),
         },
         COPY_MODE_CURSOR_MOVE: {
@@ -2133,13 +2167,15 @@ export const appMachine = setup({
             const maxScrollTop = existing.totalLines - existing.height;
             const scrollTop = Math.max(0, Math.min(maxScrollTop, event.scrollTop));
 
-            // Exit copy mode when scrolled to the bottom (only if content is loaded
-            // and we actually scrolled down from a higher position)
+            // Exit copy mode when scrolled to the bottom (only if content is loaded,
+            // no pending fetches, and we actually scrolled down from a higher position)
             if (
               maxScrollTop > 0 &&
               scrollTop >= maxScrollTop &&
               existing.scrollTop < maxScrollTop &&
-              !existing.selectionMode
+              !existing.selectionMode &&
+              !existing.loading &&
+              !existing.pendingFetch
             ) {
               enqueue.raise({ type: 'EXIT_COPY_MODE', paneId: event.paneId });
               return;
@@ -2150,12 +2186,6 @@ export const appMachine = setup({
               scrollTop,
             };
 
-            enqueue(
-              assign({
-                copyModeStates: { ...context.copyModeStates, [event.paneId]: updated },
-              }),
-            );
-
             // Check if we need to load more content
             const needed = getNeededChunk(
               scrollTop,
@@ -2164,21 +2194,37 @@ export const appMachine = setup({
               existing.historySize,
               existing.totalLines,
             );
-            if (needed && !existing.loading) {
+            if (needed) {
+              if (!existing.loading) {
+                // Not currently loading - fetch immediately
+                updated.loading = true;
+                updated.pendingFetch = undefined;
+                enqueue(
+                  assign({
+                    copyModeStates: { ...context.copyModeStates, [event.paneId]: updated },
+                  }),
+                );
+                enqueue(
+                  sendTo('tmux', {
+                    type: 'FETCH_SCROLLBACK_CELLS' as const,
+                    paneId: event.paneId,
+                    start: needed.start,
+                    end: needed.end,
+                  }),
+                );
+              } else {
+                // Already loading - queue for when current fetch completes
+                updated.pendingFetch = needed;
+                enqueue(
+                  assign({
+                    copyModeStates: { ...context.copyModeStates, [event.paneId]: updated },
+                  }),
+                );
+              }
+            } else {
               enqueue(
                 assign({
-                  copyModeStates: {
-                    ...context.copyModeStates,
-                    [event.paneId]: { ...updated, loading: true },
-                  },
-                }),
-              );
-              enqueue(
-                sendTo('tmux', {
-                  type: 'FETCH_SCROLLBACK_CELLS' as const,
-                  paneId: event.paneId,
-                  start: needed.start,
-                  end: needed.end,
+                  copyModeStates: { ...context.copyModeStates, [event.paneId]: updated },
                 }),
               );
             }
@@ -2281,23 +2327,35 @@ export const appMachine = setup({
                 updated.historySize,
                 updated.totalLines,
               );
-              if (needed && !updated.loading) {
-                enqueue(
-                  assign({
-                    copyModeStates: {
-                      ...context.copyModeStates,
-                      [paneId]: { ...updated, loading: true },
-                    },
-                  }),
-                );
-                enqueue(
-                  sendTo('tmux', {
-                    type: 'FETCH_SCROLLBACK_CELLS' as const,
-                    paneId,
-                    start: needed.start,
-                    end: needed.end,
-                  }),
-                );
+              if (needed) {
+                if (!updated.loading) {
+                  updated.loading = true;
+                  updated.pendingFetch = undefined;
+                  enqueue(
+                    assign({
+                      copyModeStates: {
+                        ...context.copyModeStates,
+                        [paneId]: updated,
+                      },
+                    }),
+                  );
+                  enqueue(
+                    sendTo('tmux', {
+                      type: 'FETCH_SCROLLBACK_CELLS' as const,
+                      paneId,
+                      start: needed.start,
+                      end: needed.end,
+                    }),
+                  );
+                } else {
+                  // Already loading - queue for when current fetch completes
+                  updated.pendingFetch = needed;
+                  enqueue(
+                    assign({
+                      copyModeStates: { ...context.copyModeStates, [paneId]: updated },
+                    }),
+                  );
+                }
               }
             }
           }),
