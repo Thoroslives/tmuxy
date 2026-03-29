@@ -78,9 +78,12 @@ export function ScrollbackTerminal({ copyState }: ScrollbackTerminalProps) {
     ],
   );
 
-  // Visible line range with overscan buffer (1 screen above + 1 screen below)
-  const renderStart = Math.max(0, scrollTop - height);
-  const renderEnd = Math.min(totalLines - 1, scrollTop + 2 * height - 1);
+  // Visible line range with overscan buffer (5 screens above + 5 screens below)
+  // Large overscan prevents blank flashes during fast mouse wheel scrolling,
+  // since the DOM scroll can outrun React's render cycle.
+  const OVERSCAN = 5;
+  const renderStart = Math.max(0, scrollTop - OVERSCAN * height);
+  const renderEnd = Math.min(totalLines - 1, scrollTop + (OVERSCAN + 1) * height - 1);
   const visibleStart = renderStart;
   const visibleEnd = renderEnd;
   const visibleCount = visibleEnd - visibleStart + 1;
