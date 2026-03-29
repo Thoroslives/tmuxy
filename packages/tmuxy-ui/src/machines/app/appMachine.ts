@@ -2230,6 +2230,18 @@ export const appMachine = setup({
             }
           }),
         },
+        COPY_MODE_SCROLL_DELTA: {
+          actions: enqueueActions(({ event, context, enqueue }) => {
+            const existing = context.copyModeStates[event.paneId];
+            if (!existing) return;
+
+            const maxScrollTop = existing.totalLines - existing.height;
+            const scrollTop = Math.max(0, Math.min(maxScrollTop, existing.scrollTop + event.delta));
+
+            // Delegate to COPY_MODE_SCROLL for the rest of the logic
+            enqueue.raise({ type: 'COPY_MODE_SCROLL', paneId: event.paneId, scrollTop });
+          }),
+        },
         COPY_MODE_YANK: {
           actions: enqueueActions(({ event, context, enqueue }) => {
             const copyState = context.copyModeStates[event.paneId];

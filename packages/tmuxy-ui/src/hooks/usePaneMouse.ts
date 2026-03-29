@@ -409,15 +409,19 @@ export function usePaneMouse(send: (event: AppMachineEvent) => void, options: Us
         return;
       }
 
-      // Copy mode: manually forward wheel delta to the scroll container.
-      // The wrapper is non-scrollable, so native scroll won't reach the
-      // inner pane-scroll-container. Adjusting scrollTop fires the onScroll
-      // handler which sends COPY_MODE_SCROLL to the state machine.
+      // Copy mode: convert wheel delta to line-based scroll events.
+      // We do NOT adjust scrollRef.scrollTop directly because the browser
+      // applies DOM scroll instantly while React re-renders the content
+      // band later, causing the viewport to outrun rendered content during
+      // fast scrolling. Instead, quantize to lines and let the state machine
+      // update scrollTop, which React syncs to the DOM on the next render.
       if (copyModeActive) {
         e.preventDefault();
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop += e.deltaY;
-        }
+        wheelRemainder.current += e.deltaY;
+        const lines = Math.trunc(wheelRemainder.current / charHeight);
+        if (lines === 0) return;
+        wheelRemainder.current -= lines * charHeight;
+        send({ type: 'COPY_MODE_SCROLL_DELTA', paneId, delta: lines });
         return;
       }
 

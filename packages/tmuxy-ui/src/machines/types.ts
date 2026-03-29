@@ -384,6 +384,7 @@ export type CopyModeSelectionStartEvent = {
 };
 export type CopyModeSelectionClearEvent = { type: 'COPY_MODE_SELECTION_CLEAR'; paneId: string };
 export type CopyModeScrollEvent = { type: 'COPY_MODE_SCROLL'; paneId: string; scrollTop: number };
+export type CopyModeScrollDeltaEvent = { type: 'COPY_MODE_SCROLL_DELTA'; paneId: string; delta: number };
 export type CopyModeYankEvent = { type: 'COPY_MODE_YANK'; paneId: string };
 export type CopyModeKeyEvent = {
   type: 'COPY_MODE_KEY';
@@ -490,6 +491,7 @@ export type AppMachineEvent =
   | CopyModeSelectionStartEvent
   | CopyModeSelectionClearEvent
   | CopyModeScrollEvent
+  | CopyModeScrollDeltaEvent
   | CopyModeYankEvent
   | CopyModeKeyEvent
   | CopyModeWordSelectEvent
